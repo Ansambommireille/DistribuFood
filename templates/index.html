@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Distributed Cloud Storage</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; padding: 40px; }
+  .container { max-width: 700px; margin: auto; background: #161b22; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0,5); }
+  input, button { padding: 12px; margin: 8px 0; width: 100%; border-radius: 8px; border: none; }
+  button { background: #238636; color: white; cursor: pointer; font-weight: bold; }
+  button:hover { background: #2ea043; }
+  #storageArea { display: none; }
+  .file-item { padding: 10px; background: #21262d; margin: 8px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .file-item button { width: auto; padding: 8px 16px; margin-left: 10px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Distributed Cloud Storage</h1>
+
+  <div id="authArea">
+    <h2>Sign Up</h2>
+    <input type="email" id="regEmail" placeholder="Email">
+    <input type="password" id="regPass" placeholder="Password">
+    <button onclick="signup()">Create Account</button>
+
+    <h2 style="margin-top:30px">Log In</h2>
+    <input type="email" id="loginEmail" placeholder="Email">
+    <input type="password" id="loginPass" placeholder="Password">
+    <button onclick="login()">Send OTP</button>
+  </div>
+
+  <div id="otpArea" style="display:none">
+    <h2>Enter OTP (check email)</h2>
+    <input type="text" id="otpInput" placeholder="6-digit code">
+    <button onclick="verifyOtp()">Verify & Login</button>
+  </div>
+
+  <div id="storageArea">
+    <button onclick="logout()" style="float:right;background:#da3633">Logout</button>
+    <h2>Welcome! Upload files</h2>
+    <input type="file" id="fileInput">
+    <button onclick="upload()">Upload</button>
+    <h3 style="margin-top:30px">Your Files</h3>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script>
+async function signup() {
+  const email = document.getElementById("regEmail").value;
+  const pass = document.getElementById("regPass").value;
+  const res = await fetch("/signup", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({email,password:pass})});
+  const json = await res.json();
+  alert(json.message || json.error);
+}
+
+async function login() {
+  const email = document.getElementById("loginEmail").value;
+  const pass = document.getElementById("loginPass").value;
+  const res = await fetch("/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({email,password:pass})});
+  const json = await res.json();
+  if (json.success) {
+    document.getElementById("authArea").style.display="none";
+    document.getElementById("otpArea").style.display="block";
+  } else alert(json.message);
+}
+
+async function verifyOtp() {
+  const otp = document.getElementById("otpInput").value;
+  const res = await fetch("/verify-otp", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({otp})});
+  const json = await res.json();
+  if (json.success) {
+    document.getElementById("otpArea").style.display="none";
+    document.getElementById("storageArea").style.display="block";
+    loadFiles();
+  } else alert(json.message);
+}
+
+async function upload() {
+  const file = document.getElementById("fileInput").files[0];
+  if (!file) return alert("Choose a file");
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/upload", {method:"POST", body:fd});
+  const json = await res.json();
+  alert(json.message || json.error);
+  loadFiles();
+}
+
+async function loadFiles() {
+  const res = await fetch("/files");
+  const json = await res.json();
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  json.files.forEach(name => {
+    const div = document.createElement("div");
+    div.className = "file-item";
+    div.innerHTML = `<span>${name}</span>`;
+    const dl = document.createElement("button");
+    dl.textContent = "Download";
+    dl.onclick = () => location.href = "/download/"+encodeURIComponent(name);
+    const del = document.createElement("button");
+    del.textContent = "Delete";
+    del.style.background = "#da3633";
+    del.onclick = async () => {
+      await fetch("/delete/"+encodeURIComponent(name), {method:"POST"});
+      loadFiles();
+    };
+    div.append(dl, del);
+    list.appendChild(div);
+  });
+}
+
+function logout() {
+  location.reload();
+}
+</script>
+</body>
+</html>
