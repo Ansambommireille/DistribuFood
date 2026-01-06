@@ -13,6 +13,11 @@
   #signupArea, #otpArea, #storageArea { display: none; }
   .file-item { padding: 10px; background: #21262d; margin: 8px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
   .file-item button { width: auto; padding: 8px 16px; margin-left: 10px; }
+  #progress-container { width: 100%; background: #21262d; border-radius: 8px; margin: 15px 0; height: 20px; }
+  #progress-bar { height: 100%; background: #238636; width: 0%; border-radius: 8px; transition: width 0.3s; }
+  #storage-info { background: #21262d; padding: 15px; border-radius: 8px; margin: 20px 0; }
+  .logout-btn { background: #da3633; margin-top: 40px; }
+  .logout-btn:hover { background: #f85149; }
 </style>
 </head>
 <body>
@@ -43,31 +48,46 @@
   </div>
 
   <div id="storageArea">
-    <button onclick="logout()" style="float:right; background:#da3633">Logout</button>
-    <h2>Welcome! Upload files</h2>
+    <h2>Welcome!</h2>
+    
+    <div id="storage-info">
+  <strong>Storage Status</strong><br>
+  Total: 1.25 GB<br>
+  Used: 0.00 GB<br>
+  Available: 1.25 GB<br>
+  Your Files: 0
+</div>
+
     <input type="file" id="fileInput">
-    <button onclick="upload()">Upload</button>
-    <h3 style="margin-top:30px">Your Files</h3>
+    <button onclick="upload()">Upload File</button>
+    
+    <div id="progress-container">
+      <div id="progress-bar"></div>
+    </div>
+
+    <h3>Your Files</h3>
     <div id="list"></div>
+
+    <button class="logout-btn" onclick="logout()">Logout</button>
   </div>
 </div>
 
 <script>
-function showLogin() {
+function showLogin() { /* same as before */ 
   document.getElementById("signupArea").style.display = "none";
   document.getElementById("loginArea").style.display = "block";
   document.getElementById("otpArea").style.display = "none";
   document.getElementById("storageArea").style.display = "none";
 }
 
-function showSignup() {
+function showSignup() { /* same */ 
   document.getElementById("loginArea").style.display = "none";
   document.getElementById("signupArea").style.display = "block";
   document.getElementById("otpArea").style.display = "none";
   document.getElementById("storageArea").style.display = "none";
 }
 
-function showOtp() {
+function showOtp() { /* same */ 
   document.getElementById("loginArea").style.display = "none";
   document.getElementById("signupArea").style.display = "none";
   document.getElementById("otpArea").style.display = "block";
@@ -80,9 +100,10 @@ function showStorage() {
   document.getElementById("otpArea").style.display = "none";
   document.getElementById("storageArea").style.display = "block";
   loadFiles();
+  loadStorageInfo();
 }
 
-async function signup() {
+async function signup() { /* same as before */ 
   const username = document.getElementById("regUsername").value;
   const email = document.getElementById("regEmail").value;
   const pass = document.getElementById("regPass").value;
@@ -96,7 +117,7 @@ async function signup() {
   if (json.success) showLogin();
 }
 
-async function login() {
+async function login() { /* same */ 
   const username = document.getElementById("loginUsername").value;
   const pass = document.getElementById("loginPass").value;
   const res = await fetch("/login", {
@@ -112,7 +133,7 @@ async function login() {
   }
 }
 
-async function verifyOtp() {
+async function verifyOtp() { /* same */ 
   const otp = document.getElementById("otpInput").value;
   const res = await fetch("/verify-otp", {
     method: "POST",
@@ -127,19 +148,42 @@ async function verifyOtp() {
   }
 }
 
-async function upload() {
+function upload() {
   const file = document.getElementById("fileInput").files[0];
-  if (!file) return alert("Choose a file");
+  if (!file) return alert("Please select a file");
+
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch("/upload", { method: "POST", body: fd });
-  const json = await res.json();
-  alert(json.message);
-  loadFiles();
+
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/upload", true);
+
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      const percent = (e.loaded / e.total) * 100;
+      document.getElementById("progress-bar").style.width = percent + "%";
+    }
+  };
+
+  xhr.onload = function() {
+    const json = JSON.parse(xhr.responseText);
+    alert(json.message || json.error);
+    document.getElementById("progress-bar").style.width = "0%";
+    loadFiles();
+    loadStorageInfo();
+  };
+
+  xhr.onerror = function() {
+    alert("Upload failed");
+    document.getElementById("progress-bar").style.width = "0%";
+  };
+
+  xhr.send(fd);
 }
 
 async function loadFiles() {
   const res = await fetch("/files");
+  if (!res.ok) return;
   const json = await res.json();
   const list = document.getElementById("list");
   list.innerHTML = "";
@@ -156,17 +200,33 @@ async function loadFiles() {
     del.onclick = async () => {
       await fetch(`/delete/${encodeURIComponent(name)}`, { method: "POST" });
       loadFiles();
+      loadStorageInfo();
     };
     div.append(dl, del);
     list.appendChild(div);
   });
 }
 
+async function loadStorageInfo() {
+  const res = await fetch("/storage_info");
+  if (!res.ok) {
+    document.getElementById("storage-info").innerHTML = "Error loading storage info";
+    return;
+  }
+  const data = await res.json();
+  document.getElementById("storage-info").innerHTML = `
+    <strong>Storage Status</strong><br>
+    Total: ${data.total_gb} GB<br>
+    Used: ${data.used_gb} GB<br>
+    Available: ${data.available_gb} GB<br>
+    Your Files: ${data.file_count}
+  `;
+}
+
 function logout() {
   location.reload();
 }
 
-// Start with login view
 showLogin();
 </script>
 </body>
